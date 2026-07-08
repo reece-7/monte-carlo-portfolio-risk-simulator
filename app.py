@@ -125,11 +125,27 @@ for i in range(number_of_assets):
     weights_percent.append(weight)
 
 
-weights = {
-    ticker: weight / 100
+portfolio_inputs = [
+    (ticker, weight / 100)
     for ticker, weight in zip(tickers, weights_percent)
     if ticker != ""
+]
+
+valid_tickers = [ticker for ticker, weight in portfolio_inputs]
+
+weights = {
+    ticker: weight
+    for ticker, weight in portfolio_inputs
 }
+
+weight_sum = sum(weight for ticker, weight in portfolio_inputs)
+
+duplicate_tickers = len(valid_tickers) != len(set(valid_tickers))
+
+non_positive_weight_tickers = [
+    ticker for ticker, weight in portfolio_inputs
+    if weight <= 0
+]
 
 weight_sum = sum(weights.values())
 valid_tickers = list(weights.keys())
@@ -161,6 +177,14 @@ if len(weights) < 2:
 
 if duplicate_tickers:
     st.warning("Duplicate tickers detected. Please use each ticker only once.")
+
+if non_positive_weight_tickers:
+    st.warning(
+        "Some tickers have a weight of 0%. Please remove them or assign a positive weight."
+    )
+
+if benchmark_ticker == "":
+    st.warning("Please enter a valid benchmark ticker.")
 
 
 # =========================
@@ -208,6 +232,10 @@ if run_button:
         st.error("Cannot run analysis: please enter at least two valid tickers.")
     elif duplicate_tickers:
         st.error("Cannot run analysis: duplicate tickers are not allowed.")
+    elif non_positive_weight_tickers:
+        st.error("Cannot run analysis: all selected assets must have a positive weight.")
+    elif benchmark_ticker == "":
+        st.error("Cannot run analysis: benchmark ticker cannot be empty.")
     else:
         with st.spinner("Running portfolio analysis..."):
             try:
@@ -514,6 +542,20 @@ if run_button:
                         mime="text/csv"
                     )
 
+            except ValueError as error:
+                st.error("Input or data error.")
+                st.warning(str(error))
+
+            except KeyError as error:
+                st.error("Ticker or benchmark data could not be found.")
+                st.warning(
+                    "Please check that all tickers and the benchmark are valid and available on Yahoo Finance."
+                )
+                st.exception(error)
+
             except Exception as error:
-                st.error("An error occurred while running the analysis.")
+                st.error("An unexpected error occurred while running the analysis.")
+                st.warning(
+                    "Please check your tickers, weights, internet connection, and selected date range."
+                )
                 st.exception(error)

@@ -11,20 +11,65 @@ def download_price_data(
     auto_adjust=True
 ):
     """
-    Downloads historical adjusted close prices for a list of tickers.
+    Downloads historical closing prices from Yahoo Finance.
+
+    Raises a clear ValueError if tickers are missing, invalid,
+    or if not enough price data is available.
     """
-    prices = yf.download(
-        tickers,
+    tickers = [ticker.upper().strip() for ticker in tickers if ticker.strip() != ""]
+
+    if len(tickers) == 0:
+        raise ValueError("No valid tickers were provided.")
+
+    raw_data = yf.download(
+        tickers=tickers,
         start=start_date,
         end=end_date,
         auto_adjust=auto_adjust,
         progress=False
-    )["Close"]
+    )
+
+    if raw_data.empty:
+        raise ValueError(
+            "No price data was downloaded. Please check your tickers, date range, and internet connection."
+        )
+
+    if isinstance(raw_data.columns, pd.MultiIndex):
+        if "Close" in raw_data.columns.get_level_values(0):
+            prices = raw_data["Close"]
+        elif "Adj Close" in raw_data.columns.get_level_values(0):
+            prices = raw_data["Adj Close"]
+        else:
+            raise ValueError("No closing price data was found for the selected tickers.")
+    else:
+        if "Close" in raw_data.columns:
+            prices = raw_data["Close"]
+        elif "Adj Close" in raw_data.columns:
+            prices = raw_data["Adj Close"]
+        else:
+            raise ValueError("No closing price data was found for the selected ticker.")
 
     if isinstance(prices, pd.Series):
-        prices = prices.to_frame()
+        prices = prices.to_frame(name=tickers[0])
+
+    prices = prices.dropna(axis=1, how="all")
+
+    missing_tickers = [
+        ticker for ticker in tickers
+        if ticker not in prices.columns
+    ]
+
+    if missing_tickers:
+        raise ValueError(
+            f"The following tickers could not be downloaded or have no price data: {missing_tickers}"
+        )
 
     prices = prices.dropna()
+
+    if len(prices) < 60:
+        raise ValueError(
+            "Not enough historical data is available. Please choose an earlier start date or different tickers."
+        )
 
     return prices
 
