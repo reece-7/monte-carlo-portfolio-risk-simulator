@@ -15,7 +15,7 @@ st.title("Interactive Portfolio Risk Analyzer")
 st.write(
     """
     Analyze a custom portfolio using historical returns, Monte Carlo simulations,
-    rebalancing analysis, transaction costs, risk parity, and benchmark sensitivity.
+    portfolio optimization, rebalancing analysis, transaction costs, and benchmark sensitivity.
     """
 )
 
@@ -87,7 +87,6 @@ number_of_assets = st.sidebar.number_input(
     step=1
 )
 
-
 default_tickers = ["SPY", "QQQ", "TLT", "GLD"]
 default_weights = [40.0, 30.0, 20.0, 10.0]
 
@@ -126,16 +125,18 @@ weights = {
 }
 
 weight_sum = sum(weights.values())
+valid_tickers = list(weights.keys())
+duplicate_tickers = len(valid_tickers) != len(set(valid_tickers))
 
 
 # =========================
-# INPUT CHECKS
+# PORTFOLIO SETUP
 # =========================
 
 st.subheader("Portfolio Setup")
 
 setup_df = pd.DataFrame({
-    "Ticker": list(weights.keys()),
+    "Ticker": valid_tickers,
     "Weight": list(weights.values())
 })
 
@@ -151,6 +152,17 @@ if abs(weight_sum - 1.0) > 0.0001:
 if len(weights) < 2:
     st.warning("Please enter at least two valid tickers.")
 
+if duplicate_tickers:
+    st.warning("Duplicate tickers detected. Please use each ticker only once.")
+
+
+# =========================
+# HELPER FUNCTION
+# =========================
+
+def convert_df_to_csv(dataframe):
+    return dataframe.to_csv(index=True).encode("utf-8")
+
 
 # =========================
 # RUN ANALYSIS
@@ -163,11 +175,13 @@ if run_button:
         st.error("Cannot run analysis: weights must sum to 100%.")
     elif len(weights) < 2:
         st.error("Cannot run analysis: please enter at least two valid tickers.")
+    elif duplicate_tickers:
+        st.error("Cannot run analysis: duplicate tickers are not allowed.")
     else:
         with st.spinner("Running portfolio analysis..."):
             try:
                 results = analyze_portfolio(
-                    tickers=list(weights.keys()),
+                    tickers=valid_tickers,
                     weights=weights,
                     start_date=str(start_date),
                     end_date=None,
@@ -187,120 +201,256 @@ if run_button:
 
                 st.success("Analysis completed successfully.")
 
-                # =========================
-                # PERFORMANCE SUMMARY
-                # =========================
-
-                st.header("Performance Summary")
-
                 performance_summary = pd.DataFrame(
                     [results["performance_summary"]],
                     index=["Custom Portfolio"]
                 )
-
-                st.dataframe(performance_summary, use_container_width=True)
-
-                st.subheader("Portfolio Value Over Time")
-                st.line_chart(results["portfolio_values"])
-
-                # =========================
-                # MONTE CARLO
-                # =========================
-
-                st.header("Monte Carlo Simulation")
-
-                st.dataframe(
-                    results["monte_carlo_comparison"],
-                    use_container_width=True
-                )
-
-                st.subheader("Monte Carlo Final Value Distribution")
 
                 monte_carlo_final_values = pd.DataFrame({
                     "Parametric Monte Carlo": results["parametric_final_values"],
                     "Bootstrap Monte Carlo": results["bootstrap_final_values"]
                 })
 
-                st.dataframe(
-                    monte_carlo_final_values.describe(),
-                    use_container_width=True
-                )
-
-                # =========================
-                # OPTIMIZATION
-                # =========================
-
-                st.header("Portfolio Optimization")
-
-                st.subheader("Optimal Portfolios")
-                st.dataframe(
-                    results["optimal_portfolios"],
-                    use_container_width=True
-                )
-
-                st.subheader("Risk Parity Weights")
-
                 risk_parity_df = results["risk_parity_weights"].to_frame(
                     name="Weight"
                 )
-
                 risk_parity_df["Weight (%)"] = risk_parity_df["Weight"] * 100
 
-                st.dataframe(risk_parity_df, use_container_width=True)
-
                 # =========================
-                # REBALANCING
+                # TABS
                 # =========================
 
-                st.header("Rebalancing Analysis")
-
-                st.dataframe(
-                    results["rebalancing_summary"],
-                    use_container_width=True
-                )
-
-                st.header("Transaction Cost Analysis")
-
-                st.dataframe(
-                    results["transaction_cost_summary"],
-                    use_container_width=True
+                tab_overview, tab_performance, tab_monte_carlo, tab_optimization, tab_rebalancing, tab_market, tab_downloads = st.tabs(
+                    [
+                        "Overview",
+                        "Performance",
+                        "Monte Carlo",
+                        "Optimization",
+                        "Rebalancing",
+                        "Market Sensitivity",
+                        "Downloads"
+                    ]
                 )
 
                 # =========================
-                # MARKET SENSITIVITY
+                # OVERVIEW TAB
                 # =========================
 
-                st.header("Market Sensitivity")
+                with tab_overview:
+                    st.header("Overview")
 
-                st.subheader("Benchmark Sensitivity")
-                st.dataframe(
-                    results["market_sensitivity_summary"],
-                    use_container_width=True
-                )
+                    col1, col2, col3, col4 = st.columns(4)
 
-                st.subheader("Upside / Downside Capture")
-                st.dataframe(
-                    results["capture_summary"],
-                    use_container_width=True
-                )
+                    col1.metric(
+                        "Initial Capital",
+                        f"{initial_value:,.2f}"
+                    )
 
-                st.subheader("Rolling Beta")
-                st.line_chart(results["rolling_beta"])
+                    col2.metric(
+                        "Final Value",
+                        f"{results['performance_summary']['Final Value']:,.2f}"
+                    )
+
+                    col3.metric(
+                        "Total Return",
+                        f"{results['performance_summary']['Total Return'] * 100:.2f}%"
+                    )
+
+                    col4.metric(
+                        "Sharpe Ratio",
+                        f"{results['performance_summary']['Sharpe Ratio']:.2f}"
+                    )
+
+                    st.subheader("Portfolio Allocation")
+                    allocation_df = setup_df[["Ticker", "Weight (%)"]].set_index("Ticker")
+                    st.bar_chart(allocation_df)
+
+                    st.subheader("Portfolio Value Over Time")
+                    st.line_chart(results["portfolio_values"])
 
                 # =========================
-                # DOWNLOADS
+                # PERFORMANCE TAB
                 # =========================
 
-                st.header("Download Results")
+                with tab_performance:
+                    st.header("Performance Summary")
 
-                csv = performance_summary.to_csv().encode("utf-8")
+                    st.dataframe(
+                        performance_summary,
+                        use_container_width=True
+                    )
 
-                st.download_button(
-                    label="Download Performance Summary CSV",
-                    data=csv,
-                    file_name="performance_summary.csv",
-                    mime="text/csv"
-                )
+                    st.subheader("Portfolio Value Over Time")
+                    st.line_chart(results["portfolio_values"])
+
+                    st.subheader("Daily Portfolio Returns")
+                    st.line_chart(results["portfolio_returns"])
+
+                # =========================
+                # MONTE CARLO TAB
+                # =========================
+
+                with tab_monte_carlo:
+                    st.header("Monte Carlo Simulation")
+
+                    st.subheader("Monte Carlo Risk Metrics")
+                    st.dataframe(
+                        results["monte_carlo_comparison"],
+                        use_container_width=True
+                    )
+
+                    st.subheader("Final Value Distribution Summary")
+                    st.dataframe(
+                        monte_carlo_final_values.describe(),
+                        use_container_width=True
+                    )
+
+                    st.subheader("Monte Carlo Final Values")
+                    st.line_chart(monte_carlo_final_values)
+
+                # =========================
+                # OPTIMIZATION TAB
+                # =========================
+
+                with tab_optimization:
+                    st.header("Portfolio Optimization")
+
+                    st.subheader("Optimal Portfolios")
+                    st.dataframe(
+                        results["optimal_portfolios"],
+                        use_container_width=True
+                    )
+
+                    st.subheader("Risk Parity Weights")
+                    st.dataframe(
+                        risk_parity_df,
+                        use_container_width=True
+                    )
+
+                    st.subheader("Risk Parity Allocation")
+                    st.bar_chart(risk_parity_df[["Weight (%)"]])
+
+                    st.subheader("Efficient Frontier Sample")
+                    st.dataframe(
+                        results["efficient_frontier"].head(100),
+                        use_container_width=True
+                    )
+
+                    st.scatter_chart(
+                        results["efficient_frontier"],
+                        x="Annualized Volatility",
+                        y="Annualized Return"
+                    )
+
+                # =========================
+                # REBALANCING TAB
+                # =========================
+
+                with tab_rebalancing:
+                    st.header("Rebalancing Analysis")
+
+                    st.subheader("Rebalancing Strategy Comparison")
+                    st.dataframe(
+                        results["rebalancing_summary"],
+                        use_container_width=True
+                    )
+
+                    st.subheader("Final Value by Rebalancing Strategy")
+                    rebalancing_chart = results["rebalancing_summary"][
+                        ["Strategy", "Final Value"]
+                    ].set_index("Strategy")
+                    st.bar_chart(rebalancing_chart)
+
+                    st.header("Transaction Cost Analysis")
+
+                    st.dataframe(
+                        results["transaction_cost_summary"],
+                        use_container_width=True
+                    )
+
+                    st.subheader("Cost Drag by Strategy and Cost Assumption")
+                    cost_drag_chart = results["transaction_cost_summary"][
+                        ["Strategy", "Transaction Cost Rate", "Cost Drag"]
+                    ].copy()
+
+                    cost_drag_pivot = cost_drag_chart.pivot_table(
+                        index="Strategy",
+                        columns="Transaction Cost Rate",
+                        values="Cost Drag"
+                    )
+
+                    st.bar_chart(cost_drag_pivot)
+
+                # =========================
+                # MARKET SENSITIVITY TAB
+                # =========================
+
+                with tab_market:
+                    st.header("Market Sensitivity")
+
+                    st.subheader("Benchmark Sensitivity")
+                    st.dataframe(
+                        results["market_sensitivity_summary"],
+                        use_container_width=True
+                    )
+
+                    st.subheader("Upside / Downside Capture")
+                    st.dataframe(
+                        results["capture_summary"],
+                        use_container_width=True
+                    )
+
+                    st.subheader("Rolling Beta")
+                    st.line_chart(results["rolling_beta"])
+
+                # =========================
+                # DOWNLOADS TAB
+                # =========================
+
+                with tab_downloads:
+                    st.header("Download Results")
+
+                    st.download_button(
+                        label="Download Performance Summary CSV",
+                        data=convert_df_to_csv(performance_summary),
+                        file_name="performance_summary.csv",
+                        mime="text/csv"
+                    )
+
+                    st.download_button(
+                        label="Download Monte Carlo Comparison CSV",
+                        data=convert_df_to_csv(results["monte_carlo_comparison"]),
+                        file_name="monte_carlo_comparison.csv",
+                        mime="text/csv"
+                    )
+
+                    st.download_button(
+                        label="Download Risk Parity Weights CSV",
+                        data=convert_df_to_csv(risk_parity_df),
+                        file_name="risk_parity_weights.csv",
+                        mime="text/csv"
+                    )
+
+                    st.download_button(
+                        label="Download Rebalancing Summary CSV",
+                        data=convert_df_to_csv(results["rebalancing_summary"]),
+                        file_name="rebalancing_summary.csv",
+                        mime="text/csv"
+                    )
+
+                    st.download_button(
+                        label="Download Transaction Cost Summary CSV",
+                        data=convert_df_to_csv(results["transaction_cost_summary"]),
+                        file_name="transaction_cost_summary.csv",
+                        mime="text/csv"
+                    )
+
+                    st.download_button(
+                        label="Download Market Sensitivity CSV",
+                        data=convert_df_to_csv(results["market_sensitivity_summary"]),
+                        file_name="market_sensitivity_summary.csv",
+                        mime="text/csv"
+                    )
 
             except Exception as error:
                 st.error("An error occurred while running the analysis.")
