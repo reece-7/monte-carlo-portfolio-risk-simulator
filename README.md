@@ -10,7 +10,7 @@ The project started as a quantitative finance notebook project and was later ref
 
 Try the app online:
 
-https://rgraph.streamlit.app
+https://rgraph-portfolio.streamlit.app
 
 ---
 
