@@ -149,8 +149,8 @@ Project_Montecarlo/
 Clone the repository:
 
 ```bash
-git clone https://github.com/reece-7/interactive-portfolio-risk-analyzer.git
-cd interactive-portfolio-risk-analyzer
+git clone https://github.com/reece-7/rgraph-portfolio-risk-analyzer.git
+cd rgraph-portfolio-risk-analyzer
 ```
 
 Create a virtual environment:
